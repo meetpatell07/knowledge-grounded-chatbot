@@ -9,3 +9,8 @@ torch
 requests
 tqdm
 typing-extensions
+google-generativeai
+langgraph
+psycopg2
+python-dotenv
+openai
