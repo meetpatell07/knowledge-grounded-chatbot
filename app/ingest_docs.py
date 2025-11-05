@@ -1,31 +1,43 @@
 # ingest_docs.py
 import os
 from dotenv import load_dotenv
-import openai
+import google.generativeai as genai
 from psycopg2.extras import Json
 from app.db import get_conn
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
-    raise RuntimeError("OPENAI_API_KEY not set in .env")
+GOOGLE_GEN_AI_API_KEY = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_GEN_AI_API_KEY:
+    raise RuntimeError("GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_API_KEY not set in .env")
+
+genai.configure(api_key=GOOGLE_GEN_AI_API_KEY)
 
 def embed_text(text: str):
-    resp = openai.Embedding.create(input=[text], model="text-embedding-3-small")
-    return resp["data"][0]["embedding"]
+    """Generate embedding using Google's text-embedding-004 model for documents"""
+    result = genai.embed_content(
+        model="models/text-embedding-004",
+        content=text,
+        task_type="retrieval_document"  # Use "retrieval_document" for documents
+    )
+    return result["embedding"]
 
 def ingest_file(path: str, title: str = None):
     title = title or os.path.basename(path)
     content = open(path, "r", encoding="utf-8").read()
     embedding = embed_text(content)
     conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO docs (title, content, metadata, embedding) VALUES (%s, %s, %s, %s)",
-            (title, content, Json({"source": path}), embedding)
-        )
-    conn.commit()
-    conn.close()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO docs (title, content, metadata, embedding) VALUES (%s, %s, %s, %s)",
+                (title, content, Json({"source": path}), embedding)
+            )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
     print("Ingested:", title)
 
 if __name__ == "__main__":
