@@ -91,41 +91,81 @@ def evaluate_node(state: ChatState) -> str:
         return "llm_augmented"
 
 
+# def kb_only_node(state: ChatState):
+#     if not state["context"]:
+#         reply = "I couldn't find an answer in internal docs."
+#     else:
+#         reply = "Based on internal docs:\n\n" + state["context"]
+#     state["reply"] = reply
+#     state["source"] = "KB"
+#     save_message(state["session_id"], "assistant", reply, source=state["source"])
+#     return state
+
 def kb_only_node(state: ChatState):
+    """Respond strictly using the retrieved KB context."""
     if not state["context"]:
         reply = "I couldn't find an answer in internal docs."
     else:
-        # Format the response to be more readable while using only KB content
-        # Split by the separator and format each section
-        sections = state["context"].split("\n\n---\n\n")
-        formatted_sections = []
-        for section in sections:
-            # Clean up the section
-            lines = section.strip().split("\n")
-            formatted_sections.append("\n".join(lines))
-        
-        reply = "Based on internal docs:\n\n" + "\n\n".join(formatted_sections)
+        # Instead of dumping all context, generate a concise response *only from KB text*
+        prompt = f"""You are an assistant that must answer strictly based on the provided CONTEXT.
+        Do NOT add any information that is not explicitly stated there.
+        If the context doesn’t answer the question, reply: "I don't know based on internal docs."
+
+        CONTEXT:
+        {state['context']}
+
+        QUESTION:
+        {state['query']}
+        """
+
+        try:
+            response = MODEL.generate_content(prompt)
+            if hasattr(response, "text") and response.text:
+                reply = response.text.strip()
+            elif hasattr(response, "candidates") and response.candidates:
+                reply = response.candidates[0].content.parts[0].text.strip()
+            else:
+                reply = "⚠️ Unexpected response format from Gemini."
+        except Exception as e:
+            reply = f"⚠️ Gemini API error during KB-only response: {str(e)}"
+
+    # Mark as KB-only
     state["reply"] = reply
     state["source"] = "KB"
     save_message(state["session_id"], "assistant", reply, source=state["source"])
     return state
 
 
+
 def llm_augmented_node(state: ChatState):
-    # Build a clear context + question prompt
-    prompt = f"""You are an assistant. Use the CONTEXT below to answer the QUESTION.
-If the context doesn't contain the answer, say "I don't know based on internal docs." and then add a short general suggestion.
+    """Generate an answer using KB + LLM fallback."""
+    context = state.get("context", "").strip()
+    query = state.get("query", "").strip()
+
+    # Build prompt differently depending on whether KB exists
+    if context:
+        prompt = f"""You are a helpful assistant for internal teams.
+Use the CONTEXT below to answer the QUESTION accurately and naturally.
+If the context does not contain enough information, say:
+"I don't know based on internal docs." Then, provide a short helpful general answer.
 
 CONTEXT:
-{state['context']}
+{context}
 
 QUESTION:
-{state['query']}
+{query}
+"""
+    else:
+        # No KB context found — pure general LLM mode
+        prompt = f"""You are a helpful assistant.
+Answer the following question conversationally:
+
+QUESTION:
+{query}
 """
 
     try:
         response = MODEL.generate_content(prompt)
-        # Handle response safely
         if hasattr(response, 'text') and response.text:
             answer = response.text.strip()
         elif hasattr(response, 'candidates') and response.candidates:
@@ -135,9 +175,9 @@ QUESTION:
     except Exception as e:
         answer = f"⚠️ Gemini API error: {str(e)}"
 
-    # Label the response source
+    # Decide the source label
     state["reply"] = answer
-    state["source"] = "KB+LLM" if state["context"] else "LLM"
+    state["source"] = "KB+LLM" if context else "LLM"
     save_message(state["session_id"], "assistant", answer, source=state["source"])
     return state
 
