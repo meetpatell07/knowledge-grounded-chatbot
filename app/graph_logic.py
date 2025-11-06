@@ -49,15 +49,29 @@ class ChatState(TypedDict):
 # Instead of using psycopg2, we use the Prisma API to save the message
 def save_message(session_id, role, content, source=None):
     """Save message using Prisma API, ensuring session exists"""
-    data = {
-        "sessionId": session_id,  # Note: Prisma uses camelCase
-        "role": role,
-        "content": content,
-        "source": source
-    }
-    resp = requests.post(f"{PRISMA_API_URL}/messages", json=data)
-    if resp.status_code != 200:
-        print("⚠️ Failed to save message:", resp.text)
+    try:
+        data = {
+            "sessionId": session_id,  # Note: Prisma uses camelCase
+            "role": role,
+            "content": content,
+            "source": source
+        }
+        resp = requests.post(f"{PRISMA_API_URL}/messages", json=data, timeout=5)
+        if resp.status_code != 200:
+            error_text = resp.text
+            print(f"⚠️ Failed to save message (status {resp.status_code}): {error_text}")
+            # Try to log more details
+            try:
+                error_json = resp.json()
+                print(f"   Error details: {error_json}")
+            except:
+                pass
+        else:
+            print(f"✓ Saved {role} message for session {session_id[:8]}...")
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Network error saving message: {str(e)}")
+    except Exception as e:
+        print(f"⚠️ Unexpected error saving message: {str(e)}")
 
 
 # --- Graph nodes ---
