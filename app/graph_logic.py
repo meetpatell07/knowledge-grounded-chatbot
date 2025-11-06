@@ -49,7 +49,7 @@ def save_message(session_id, role, content, source=None):
             
             # Create message
             message = Message(
-                sessionId=session_id,
+                session_id=session_id,
                 role=role,
                 content=content,
                 source=source

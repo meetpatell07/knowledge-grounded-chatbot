@@ -1,14 +1,13 @@
 # main.py
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import List
 from datetime import datetime
 import uuid
 
 from app.graph_logic import handle_chat
-from app.db import get_db, engine
+from app.database import get_db, engine  # Changed from app.db
 from app.models import Base, Session as SessionModel, Message as MessageModel
 
 from app.schemas import (
@@ -30,25 +29,38 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://knowledge-grounded-chatbot-frontend.pages.dev",
+        "https://efed557c.knowledge-grounded-chatbot-frontend.pages.dev"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ---------- Routes ----------
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    session_id = req.session_id or str(uuid.uuid4())
+    """Main chat endpoint"""
     if not req.message:
-        raise HTTPException(status_code=400, detail="message required")
+        raise HTTPException(status_code=400, detail="Message is required")
+    
+    session_id = req.session_id or str(uuid.uuid4())
     result = handle_chat(session_id, req.message)
-    return ChatResponse(reply=result["reply"], source=result["source"], session_id=session_id)
+    
+    return ChatResponse(
+        reply=result["reply"],
+        source=result["source"],
+        session_id=session_id
+    )
 
 @app.get("/health")
-def health(db: Session = Depends(get_db)):
+def health():
+    """Simple health check"""
+    from sqlalchemy import text
     try:
-        # Test database connection
-        db.execute("SELECT 1")
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
     except Exception as e:
         return {"status": "error", "database": "disconnected", "error": str(e)}
@@ -58,7 +70,8 @@ def health(db: Session = Depends(get_db)):
 def get_all_sessions(db: Session = Depends(get_db)):
     """Get all sessions with their messages"""
     try:
-        sessions = db.query(SessionModel).order_by(SessionModel.createdAt.desc()).all()
+        # Use snake_case: created_at
+        sessions = db.query(SessionModel).order_by(SessionModel.created_at.desc()).all()
         
         result = []
         for session in sessions:
@@ -66,20 +79,20 @@ def get_all_sessions(db: Session = Depends(get_db)):
             session_messages = [
                 MessageResponse(
                     id=str(msg.id),
-                    sessionId=str(msg.sessionId),
+                    sessionId=str(msg.session_id),  # Map to camelCase for API
                     role=msg.role,
                     content=msg.content,
                     source=msg.source,
-                    createdAt=msg.createdAt
+                    createdAt=msg.created_at  # Map to camelCase
                 )
-                for msg in sorted(session.messages, key=lambda m: m.createdAt)
+                for msg in sorted(session.messages, key=lambda m: m.created_at)
             ]
             
             result.append(SessionResponse(
                 id=str(session.id),
-                userId=session.userId,
-                createdAt=session.createdAt,
-                lastActive=session.lastActive,
+                userId=session.user_id,  # Map to camelCase
+                createdAt=session.created_at,  # Map to camelCase
+                lastActive=session.last_active,  # Map to camelCase
                 messages=session_messages
             ))
         
@@ -92,17 +105,17 @@ def get_session_messages(session_id: str, db: Session = Depends(get_db)):
     """Get all messages for a specific session"""
     try:
         messages = db.query(MessageModel).filter(
-            MessageModel.sessionId == session_id
-        ).order_by(MessageModel.createdAt.asc()).all()
+            MessageModel.session_id == session_id
+        ).order_by(MessageModel.created_at.asc()).all()
         
         return [
             MessageResponse(
                 id=str(msg.id),
-                sessionId=str(msg.sessionId),
+                sessionId=str(msg.session_id),  # Map to camelCase
                 role=msg.role,
                 content=msg.content,
                 source=msg.source,
-                createdAt=msg.createdAt
+                createdAt=msg.created_at  # Map to camelCase
             )
             for msg in messages
         ]
@@ -119,17 +132,16 @@ def create_or_get_session(req: SessionCreateRequest, db: Session = Depends(get_d
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         
         if session:
-            # Update lastActive
-            from datetime import datetime
-            session.lastActive = datetime.utcnow()
+            # Update last_active (snake_case)
+            session.last_active = datetime.utcnow()
             db.commit()
             db.refresh(session)
             
             return SessionResponse(
                 id=str(session.id),
-                userId=session.userId,
-                createdAt=session.createdAt,
-                lastActive=session.lastActive,
+                userId=session.user_id,  # Map to camelCase
+                createdAt=session.created_at,  # Map to camelCase
+                lastActive=session.last_active,  # Map to camelCase
                 messages=[]
             )
         else:
@@ -141,9 +153,9 @@ def create_or_get_session(req: SessionCreateRequest, db: Session = Depends(get_d
             
             return SessionResponse(
                 id=str(new_session.id),
-                userId=new_session.userId,
-                createdAt=new_session.createdAt,
-                lastActive=new_session.lastActive,
+                userId=new_session.user_id,  # Map to camelCase
+                createdAt=new_session.created_at,  # Map to camelCase
+                lastActive=new_session.last_active,  # Map to camelCase
                 messages=[]
             )
     except Exception as e:
