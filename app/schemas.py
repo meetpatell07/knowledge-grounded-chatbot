@@ -10,6 +10,7 @@ from datetime import datetime
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
+    enable_llm: bool = False 
 
 
 class ChatResponse(BaseModel):

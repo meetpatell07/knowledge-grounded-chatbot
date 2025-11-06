@@ -29,6 +29,7 @@ class ChatState(TypedDict):
     best_distance: Optional[float]
     reply: str
     source: str
+    enable_llm: bool
 
 
 # --- Save chat messages in DB ---
@@ -78,6 +79,11 @@ def retrieve_node(state: ChatState):
 
 def evaluate_node(state: ChatState) -> str:
     """Routing function - returns string, not dict!"""
+    # If toggle is OFF, always use KB only
+    if not state.get("enable_llm", False):
+        return "kb_only"
+    
+    # If toggle is ON, use automatic routing based on distance
     # Decide if we trust the KB or need LLM help
     if state["best_distance"] is not None and state["best_distance"] < 0.35:
         return "kb_only"
@@ -89,7 +95,16 @@ def kb_only_node(state: ChatState):
     if not state["context"]:
         reply = "I couldn't find an answer in internal docs."
     else:
-        reply = "Based on internal docs:\n\n" + state["context"]
+        # Format the response to be more readable while using only KB content
+        # Split by the separator and format each section
+        sections = state["context"].split("\n\n---\n\n")
+        formatted_sections = []
+        for section in sections:
+            # Clean up the section
+            lines = section.strip().split("\n")
+            formatted_sections.append("\n".join(lines))
+        
+        reply = "Based on internal docs:\n\n" + "\n\n".join(formatted_sections)
     state["reply"] = reply
     state["source"] = "KB"
     save_message(state["session_id"], "assistant", reply, source=state["source"])
@@ -146,13 +161,14 @@ chatbot_graph = graph.compile()
 
 
 # --- Chat handler ---
-def handle_chat(session_id: str, message: str):
+def handle_chat(session_id: str, message: str, enable_llm: bool = False):
     save_message(session_id, "user", message)
     initial_state = {
         "session_id": session_id,
         "query": message,
         "context": "",
         "best_distance": None,
+        "enable_llm": enable_llm,
         "reply": "",
         "source": "",
     }
