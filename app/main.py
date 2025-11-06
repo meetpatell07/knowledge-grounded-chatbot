@@ -30,7 +30,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://knowledge-grounded-chatbot-frontend.pages.dev",
-        "https://efed557c.knowledge-grounded-chatbot-frontend.pages.dev"
+        "https://*.knowledge-grounded-chatbot-frontend.pages.dev"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -46,7 +46,7 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Message is required")
     
     session_id = req.session_id or str(uuid.uuid4())
-    result = handle_chat(session_id, req.message)
+    result = handle_chat(session_id, req.message, enable_llm=req.enable_llm)  # Update this line
     
     return ChatResponse(
         reply=result["reply"],
