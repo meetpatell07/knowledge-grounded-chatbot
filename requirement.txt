@@ -6,11 +6,13 @@ faiss-cpu
 sentence-transformers
 transformers
 torch
-requests
 tqdm
 typing-extensions
 google-generativeai
 langgraph
 psycopg2
+psycopg2-binary
 python-dotenv
 openai
+sqlalchemy
+alembic
