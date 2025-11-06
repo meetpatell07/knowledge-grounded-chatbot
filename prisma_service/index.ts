@@ -1,5 +1,5 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -32,4 +32,4 @@ app.post("/messages", async (req, res) => {
   res.json(msg);
 });
 
-app.listen(4000, () => console.log("✅ Prisma service running on :4000"));
+app.listen(4000, () => console.log("Prisma service running on :4000"));
