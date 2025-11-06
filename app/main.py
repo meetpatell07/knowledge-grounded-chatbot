@@ -161,3 +161,23 @@ def create_or_get_session(req: SessionCreateRequest, db: Session = Depends(get_d
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create/get session: {str(e)}")
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str, db: Session = Depends(get_db)):
+    """Delete a session and all its messages"""
+    try:
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Delete session (messages will be cascade deleted due to relationship)
+        db.delete(session)
+        db.commit()
+        
+        return {"message": "Session deleted successfully", "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete session: {str(e)}")
