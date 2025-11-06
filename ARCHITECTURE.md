@@ -36,3 +36,5 @@ CREATE TABLE docs (
 ```
 
 3. Create `.env` file:
+
+4. 

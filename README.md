@@ -71,16 +71,6 @@ CREATE INDEX ON docs USING ivfflat (embedding vector_cosine_ops);
 
 Create a `.env` file in the `backend/` directory:
 
-```env
-# Database Configuration
-DATABASE_URL=postgresql://username:password@localhost:5432/kg_chatbot
-
-# Google Generative AI API Key
-GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
-# Alternative: GOOGLE_API_KEY=your_api_key_here
-```
-
-**Note**: Replace `username`, `password`, and `your_api_key_here` with your actual credentials.
 
 ### 4. Ingest Documents
 

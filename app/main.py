@@ -46,7 +46,7 @@ def chat(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Message is required")
     
     session_id = req.session_id or str(uuid.uuid4())
-    result = handle_chat(session_id, req.message, enable_llm=req.enable_llm)  # Update this line
+    result = handle_chat(session_id, req.message, enable_llm=req.enable_llm) 
     
     return ChatResponse(
         reply=result["reply"],
