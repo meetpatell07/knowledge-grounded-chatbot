@@ -1,6 +1,6 @@
 # graph_logic.py
 from langgraph.graph import StateGraph, END, START
-from typing import TypedDict
+from typing import TypedDict, Optional
 from app.retrieve import retrieve
 from app.db import get_conn
 import google.generativeai as genai
@@ -9,24 +9,23 @@ import requests
 
 PRISMA_API_URL = "http://localhost:4000"
 
-
 # Load your Gemini API key from env
-GOOGLE_GEN_AI_API_KEY = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
+GOOGLE_GEN_AI_API_KEY = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_GEN_AI_API_KEY:
-    raise ValueError("Missing GOOGLE_GENERATIVE_AI_API_KEY in environment variables.")
+    raise ValueError("Missing GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_API_KEY in environment variables.")
 
 # Configure the Gemini client
 genai.configure(api_key=GOOGLE_GEN_AI_API_KEY)
 
 # Use Gemini Flash for speed (you can also use gemini-1.5-pro for more reasoning)
-MODEL = genai.GenerativeModel("gemini-1.5-flash")
+MODEL = genai.GenerativeModel("gemini-2.5-flash")
 
 # --- Define chat state ---
 class ChatState(TypedDict):
     session_id: str
     query: str
     context: str
-    best_distance: float
+    best_distance: Optional[float]  # Fixed: can be None
     reply: str
     source: str
 
@@ -49,8 +48,9 @@ class ChatState(TypedDict):
 
 # Instead of using psycopg2, we use the Prisma API to save the message
 def save_message(session_id, role, content, source=None):
+    """Save message using Prisma API, ensuring session exists"""
     data = {
-        "session_id": session_id,
+        "sessionId": session_id,  # Note: Prisma uses camelCase
         "role": role,
         "content": content,
         "source": source
@@ -71,18 +71,14 @@ def retrieve_node(state: ChatState):
     return state
 
 
-def evaluate_node(state: ChatState):
+def evaluate_node(state: ChatState) -> str:
+    """Routing function - returns string, not dict!"""
     # Decide if we trust the KB or need LLM help
     if state["best_distance"] is not None and state["best_distance"] < 0.35:
         return "kb_only"
-    else:   
+    else:
         return "llm_augmented"
 
-def get_messages(session_id):
-    resp = requests.get(f"{PRISMA_API_URL}/messages/{session_id}")
-    if resp.status_code == 200:
-        return resp.json()
-    return []
 
 def kb_only_node(state: ChatState):
     if not state["context"]:
@@ -97,10 +93,8 @@ def kb_only_node(state: ChatState):
 
 def llm_augmented_node(state: ChatState):
     # Build a clear context + question prompt
-    prompt = f"""
-You are an assistant. Use the CONTEXT below to answer the QUESTION.
-If the context doesn’t contain the answer, say
-"I don't know based on internal docs." and then add a short general suggestion.
+    prompt = f"""You are an assistant. Use the CONTEXT below to answer the QUESTION.
+If the context doesn't contain the answer, say "I don't know based on internal docs." and then add a short general suggestion.
 
 CONTEXT:
 {state['context']}
@@ -111,15 +105,19 @@ QUESTION:
 
     try:
         response = MODEL.generate_content(prompt)
-        answer = response.text.strip()
+        # Handle response safely
+        if hasattr(response, 'text') and response.text:
+            answer = response.text.strip()
+        elif hasattr(response, 'candidates') and response.candidates:
+            answer = response.candidates[0].content.parts[0].text.strip()
+        else:
+            answer = "⚠️ Gemini API returned an unexpected response format."
     except Exception as e:
-        answer = f"⚠️ Gemini API error: {e}"
+        answer = f"⚠️ Gemini API error: {str(e)}"
 
     # Label the response source
     state["reply"] = answer
-    state["source"] = (
-        "KB+LLM" if state["context"] else "LLM"
-    )
+    state["source"] = "KB+LLM" if state["context"] else "LLM"
     save_message(state["session_id"], "assistant", answer, source=state["source"])
     return state
 
@@ -127,14 +125,18 @@ QUESTION:
 # --- Build the StateGraph ---
 graph = StateGraph(ChatState)
 graph.add_node("retrieve", retrieve_node)
-graph.add_node("evaluate", evaluate_node)
+# NOTE: evaluate_node is NOT a node - it's only a routing function
+#graph.add_node("evaluate", evaluate_node)
 graph.add_node("kb_only", kb_only_node)
 graph.add_node("llm_augmented", llm_augmented_node)
 
+#graph.add_edge(START, "retrieve")
+#graph.add_edge("retrieve", "evaluate")
 graph.add_edge(START, "retrieve")
-graph.add_edge("retrieve", "evaluate")
 graph.add_conditional_edges(
-    "evaluate", evaluate_node, {"kb_only": "kb_only", "llm_augmented": "llm_augmented"}
+    "retrieve", 
+    evaluate_node, 
+    {"kb_only": "kb_only", "llm_augmented": "llm_augmented"}
 )
 graph.add_edge("kb_only", END)
 graph.add_edge("llm_augmented", END)

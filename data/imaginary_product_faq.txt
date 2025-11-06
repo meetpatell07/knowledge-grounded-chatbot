@@ -1,0 +1,52 @@
+ImaginaryProduct — Internal FAQ (2 pages)
+
+Product Overview
+ImaginaryProduct is an internal tool for team productivity. It provides task tracking, lightweight project boards, and automated daily summaries. The product is intended for small teams (2–25 people) and integrates with email and Slack.
+
+Key Features:
+- Task tracker with due dates, tags, and mentions.
+- Project boards (Kanban) with drag-and-drop.
+- Automated daily summary emails sent at 6:00 AM UTC.
+- Slack integration available for workspace admins.
+- SSO (OAuth2) support with Google Workspace and Okta.
+
+Getting Started
+1. Sign-up: New users are invited via email from an admin. The invite link expires in 72 hours.
+2. Workspace creation: The creator becomes the default workspace owner and can add/remove members.
+3. Roles:
+   - Owner: full permissions.
+   - Admin: manage members and integrations.
+   - Member: create and manage tasks and boards.
+
+Billing & Limits
+- Free tier: up to 10 active users per workspace, 1 private board, 2GB storage.
+- Pro tier: $8 per user/month billed monthly, unlimited boards, 100GB storage.
+- Enterprise: Contact Sales for custom pricing and SSO+SAML support.
+- Billing cycle: Monthly by default. Cancelling a workspace freezes it for 30 days before deletion.
+
+Privacy & Data Retention
+- User data is stored in encrypted databases. Backups retained for 90 days.
+- Deleted items are retained for 30 days and then permanently removed.
+- Support staff can export workspace data on owner request via Data Export tool.
+
+Common Questions
+Q: How do I reset my password?
+A: Use the "forgot password" link on login. Reset tokens expire after 1 hour.
+
+Q: What if an invite link expired?
+A: Ask an admin to re-send an invite or generate a new one from workspace settings.
+
+Q: How to enable Slack integration?
+A: Workspace Admins -> Integrations -> Slack -> "Connect". You will be redirected to Slack to approve permissions. Only workspace Admins can do this.
+
+Q: How are daily summaries generated?
+A: Summaries compile top priority tasks, overdue items, and new comments from the last 24 hours.
+
+Troubleshooting
+- If email invites fail, check the SPF/DKIM settings for the sending domain.
+- If SSO fails for Okta: ensure the SAML app uses the correct ACS URL: https://app.imaginaryproduct.example/auth/saml/acs
+
+Developer Notes (short)
+- API base path: /api/v1
+- Search endpoint: GET /api/v1/search?q=<query>
+- Daily job: cron at 6:00 UTC on production
