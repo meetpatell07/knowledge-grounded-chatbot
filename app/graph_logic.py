@@ -5,6 +5,10 @@ from app.retrieve import retrieve
 from app.db import get_conn
 import google.generativeai as genai
 import os
+import requests
+
+PRISMA_API_URL = "http://localhost:4000"
+
 
 # Load your Gemini API key from env
 GOOGLE_GEN_AI_API_KEY = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
@@ -28,20 +32,32 @@ class ChatState(TypedDict):
 
 
 # --- Save chat messages in DB ---
+# def save_message(session_id, role, content, source=None):
+#     conn = get_conn()
+#     try:
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 "INSERT INTO messages (session_id, role, content, source) VALUES (%s,%s,%s,%s)",
+#                 (session_id, role, content, source),
+#             )
+#         conn.commit()
+#     except Exception as e:
+#         conn.rollback()
+#         raise e
+#     finally:
+#         conn.close()
+
+# Instead of using psycopg2, we use the Prisma API to save the message
 def save_message(session_id, role, content, source=None):
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO messages (session_id, role, content, source) VALUES (%s,%s,%s,%s)",
-                (session_id, role, content, source),
-            )
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()
+    data = {
+        "session_id": session_id,
+        "role": role,
+        "content": content,
+        "source": source
+    }
+    resp = requests.post(f"{PRISMA_API_URL}/messages", json=data)
+    if resp.status_code != 200:
+        print("⚠️ Failed to save message:", resp.text)
 
 
 # --- Graph nodes ---
@@ -62,6 +78,11 @@ def evaluate_node(state: ChatState):
     else:   
         return "llm_augmented"
 
+def get_messages(session_id):
+    resp = requests.get(f"{PRISMA_API_URL}/messages/{session_id}")
+    if resp.status_code == 200:
+        return resp.json()
+    return []
 
 def kb_only_node(state: ChatState):
     if not state["context"]:
