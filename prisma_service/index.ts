@@ -1,26 +1,54 @@
 import express from "express";
 import { PrismaClient } from '@prisma/client';
+import cors from 'cors';
 
 const prisma = new PrismaClient();
 const app = express();
+
+// Enable CORS
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true
+}));
+
 app.use(express.json());
+
+// Health check endpoint
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$connect();
+    res.json({ status: "ok", database: "connected" });
+  } catch (error: any) {
+    res.status(500).json({ status: "error", error: error.message });
+  }
+});
 
 // Get all sessions
 app.get("/sessions", async (_req, res) => {
-  const sessions = await prisma.session.findMany({
-    include: { messages: true },
-    orderBy: { createdAt: "desc" }
-  });
-  res.json(sessions);
+  try {
+    const sessions = await prisma.session.findMany({
+      include: { messages: true },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(sessions);
+  } catch (error: any) {
+    console.error("Error fetching sessions:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch sessions" });
+  }
 });
 
 // Get messages by session ID
 app.get("/sessions/:id/messages", async (req, res) => {
-  const msgs = await prisma.message.findMany({
-    where: { sessionId: req.params.id },
-    orderBy: { createdAt: "asc" }
-  });
-  res.json(msgs);
+  try {
+    const msgs = await prisma.message.findMany({
+      where: { sessionId: req.params.id },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(msgs);
+  } catch (error: any) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch messages" });
+  }
 });
 
 // Create or get session
