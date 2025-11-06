@@ -2,12 +2,13 @@
 from langgraph.graph import StateGraph, END, START
 from typing import TypedDict, Optional
 from app.retrieve import retrieve
-from app.db import get_conn
+from app.db import get_db_context
+from app.models import Session, Message
 import google.generativeai as genai
 import os
-import requests
+from datetime import datetime
+from app.db import get_conn
 
-PRISMA_API_URL = "http://localhost:4000"
 
 # Load your Gemini API key from env
 GOOGLE_GEN_AI_API_KEY = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -25,53 +26,43 @@ class ChatState(TypedDict):
     session_id: str
     query: str
     context: str
-    best_distance: Optional[float]  # Fixed: can be None
+    best_distance: Optional[float]
     reply: str
     source: str
 
 
 # --- Save chat messages in DB ---
-# def save_message(session_id, role, content, source=None):
-#     conn = get_conn()
-#     try:
-#         with conn.cursor() as cur:
-#             cur.execute(
-#                 "INSERT INTO messages (session_id, role, content, source) VALUES (%s,%s,%s,%s)",
-#                 (session_id, role, content, source),
-#             )
-#         conn.commit()
-#     except Exception as e:
-#         conn.rollback()
-#         raise e
-#     finally:
-#         conn.close()
-
-# Instead of using psycopg2, we use the Prisma API to save the message
 def save_message(session_id, role, content, source=None):
-    """Save message using Prisma API, ensuring session exists"""
-    try:
-        data = {
-            "sessionId": session_id,  # Note: Prisma uses camelCase
-            "role": role,
-            "content": content,
-            "source": source
-        }
-        resp = requests.post(f"{PRISMA_API_URL}/messages", json=data, timeout=5)
-        if resp.status_code != 200:
-            error_text = resp.text
-            print(f"Failed to save message (status {resp.status_code}): {error_text}")
-            # Try to log more details
-            try:
-                error_json = resp.json()
-                print(f"   Error details: {error_json}")
-            except:
-                pass
-        else:
+    """Save message using SQLAlchemy, ensuring session exists"""
+    with get_db_context() as db:
+        try:
+            # Get or create session
+            session = db.query(Session).filter(Session.id == session_id).first()
+            
+            if not session:
+                # Create new session
+                session = Session(id=session_id)
+                db.add(session)
+            else:
+                # Update lastActive
+                session.lastActive = datetime.utcnow()
+            
+            # Create message
+            message = Message(
+                sessionId=session_id,
+                role=role,
+                content=content,
+                source=source
+            )
+            db.add(message)
+            db.commit()
+            
             print(f"✓ Saved {role} message for session {session_id[:8]}...")
-    except requests.exceptions.RequestException as e:
-        print(f"Network error saving message: {str(e)}")
-    except Exception as e:
-        print(f"Unexpected error saving message: {str(e)}")
+            return str(message.id)
+        except Exception as e:
+            db.rollback()
+            print(f"Error saving message: {str(e)}")
+            raise e
 
 
 # --- Graph nodes ---
@@ -139,13 +130,9 @@ QUESTION:
 # --- Build the StateGraph ---
 graph = StateGraph(ChatState)
 graph.add_node("retrieve", retrieve_node)
-# NOTE: evaluate_node is NOT a node - it's only a routing function
-#graph.add_node("evaluate", evaluate_node)
 graph.add_node("kb_only", kb_only_node)
 graph.add_node("llm_augmented", llm_augmented_node)
 
-#graph.add_edge(START, "retrieve")
-#graph.add_edge("retrieve", "evaluate")
 graph.add_edge(START, "retrieve")
 graph.add_conditional_edges(
     "retrieve", 
