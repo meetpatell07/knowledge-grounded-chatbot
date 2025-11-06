@@ -1,8 +1,12 @@
 # ingest_docs.py
 import os
+import sys
 from dotenv import load_dotenv
 import google.generativeai as genai
 from psycopg2.extras import Json
+
+# Add project root to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from app.db import get_conn
 
 load_dotenv()
@@ -42,4 +46,4 @@ def ingest_file(path: str, title: str = None):
 
 if __name__ == "__main__":
     # default file path; adjust as needed
-    ingest_file(os.path.join(os.path.dirname(__file__), "..", "..", "data", "internal_faq.txt"), "Internal FAQ")
+    ingest_file(os.path.join(os.path.dirname(__file__), "..", "data", "imaginary_product_faq.txt"), "Product FAQ")
