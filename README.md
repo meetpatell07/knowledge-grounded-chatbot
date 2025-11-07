@@ -215,7 +215,6 @@ backend/
 │   ├── models.py            # SQLAlchemy database models
 │   ├── schemas.py           # Pydantic request/response schemas
 │   ├── database.py          # Database configuration (SQLAlchemy)
-│   ├── db.py                # Database utilities and pgvector connection
 │   ├── graph_logic.py       # LangGraph workflow for chat logic
 │   ├── retrieve.py          # Vector retrieval functions
 │   └── ingest_docs.py       # Document ingestion script
@@ -313,11 +312,4 @@ curl -X POST http://localhost:8000/chat \
 - See `ARCHITECTURE.md` for detailed architecture overview
 - API documentation available at `/docs` when server is running
 
-## 📝 License
-
-[Add your license here]
-
-## 👥 Contributing
-
-[Add contribution guidelines if applicable]
 
