@@ -129,19 +129,6 @@ This document explains the backend architecture, technology choices, and the log
 - **Integration**: Works seamlessly with SQLAlchemy ORM
 - **Mature Extension**: pgvector is well-maintained and production-ready
 
-**Alternatives Considered**: 
-
-1. **FAISS (Facebook AI Similarity Search)**
-   - **Rejected**: In-memory only, not persistent, requires separate database for relational data
-   - **Why**: Need persistent storage and unified data management
-
-2. **Pinecone / Weaviate (Managed Vector Databases)**
-   - **Rejected**: Additional cost, vendor lock-in, separate from relational data
-   - **Why**: Want unified storage and avoid vendor dependencies
-
-3. **Chroma**
-   - **Rejected**: Less mature, smaller community, requires separate setup
-   - **Why**: PostgreSQL + pgvector is more established and reliable
 
 **Why pgvector over alternatives?**
 - **Single Database**: No need to maintain separate vector and relational databases
@@ -179,9 +166,7 @@ This document explains the backend architecture, technology choices, and the log
 - **Model Variety**: Multiple model options for different use cases
 
 **Alternatives Considered**: OpenAI GPT, Anthropic Claude
-- **Rejected**: 
-  - OpenAI: More expensive, embedding model less optimized for retrieval
-  - Anthropic: More expensive, less mature API
+
 
 ## Response Pathway Switching Logic
 
